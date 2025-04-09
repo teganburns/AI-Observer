@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Observer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        dark: {
+                            50: '#f9fafb',
+                            100: '#f3f4f6',
+                            200: '#e5e7eb',
+                            300: '#d1d5db',
+                            400: '#9ca3af',
+                            500: '#6b7280',
+                            600: '#4b5563',
+                            700: '#374151',
+                            800: '#1f2937',
+                            900: '#111827',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/jsoneditor/9.10.0/jsoneditor.min.css" rel="stylesheet" type="text/css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsoneditor/9.10.0/jsoneditor.min.js"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .jsoneditor {
+            border: 1px solid #374151 !important;
+            background-color: #1f2937 !important;
+        }
+        .jsoneditor-menu {
+            background-color: #374151 !important;
+            border-bottom: 1px solid #4b5563 !important;
+        }
+        .jsoneditor-navigation-bar {
+            background-color: #1f2937 !important;
+            color: #e5e7eb !important;
+        }
+        .jsoneditor-poweredBy {
+            display: none;
+        }
+        .draggable-image {
+            cursor: move;
+            transition: transform 0.2s ease;
+        }
+        .draggable-image:active {
+            transform: scale(0.95);
+        }
+        .drop-zone {
+            border: 2px dashed #4b5563;
+            transition: border-color 0.2s ease;
+        }
+        .drop-zone.drag-over {
+            border-color: #60a5fa;
+        }
+    </style>
+</head>
+<body class="bg-dark-900 text-gray-100">
+    <!-- Navigation -->
+    <nav class="bg-dark-800 shadow-lg">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex">
+                    <div class="flex-shrink-0 flex items-center">
+                        <h1 class="text-2xl font-bold text-gray-100">AI Observer</h1>
+                    </div>
+                    <div class="hidden sm:ml-6 sm:flex sm:space-x-8">
+                        <a href="/" class="border-indigo-500 text-gray-100 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">Home</a>
+                        <a href="/dashboard" class="border-transparent text-gray-400 hover:border-gray-300 hover:text-gray-300 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">Dashboard</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Controls Section -->
+        <div class="bg-dark-800 rounded-lg shadow p-6 mb-8">
+            <div class="space-y-4">
+                <button id="captureBtn" class="w-full sm:w-auto bg-indigo-600 text-white px-6 py-3 rounded-md hover:bg-indigo-700 transition-colors">
+                    Capture Frame
+                </button>
+                <div class="flex flex-col sm:flex-row gap-4">
+                    <textarea id="messageInput" class="flex-1 rounded-md border-dark-600 bg-dark-700 text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500" rows="3" placeholder="Enter your message..."></textarea>
+                    <button id="sendBtn" class="w-full sm:w-auto bg-green-600 text-white px-6 py-3 rounded-md hover:bg-green-700 transition-colors">
+                        Send Request
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Grid Layout -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <!-- Recent Captures -->
+            <div class="bg-dark-800 rounded-lg shadow p-6">
+                <h2 class="text-xl font-semibold text-gray-100 mb-4">Recent Captures</h2>
+                <div id="capturesGrid" class="grid grid-cols-2 sm:grid-cols-3 gap-4 drop-zone" data-zone="recent">
+                    <!-- Recent captures will be displayed here -->
+                </div>
+            </div>
+
+            <!-- Archived Captures -->
+            <div class="bg-dark-800 rounded-lg shadow p-6">
+                <h2 class="text-xl font-semibold text-gray-100 mb-4">Archived Captures</h2>
+                <div id="archivedGrid" class="grid grid-cols-2 sm:grid-cols-3 gap-4 drop-zone" data-zone="archived">
+                    <!-- Archived captures will be displayed here -->
+                </div>
+            </div>
+
+            <!-- Recent Responses -->
+            <div class="bg-dark-800 rounded-lg shadow p-6 lg:col-span-2">
+                <h2 class="text-xl font-semibold text-gray-100 mb-4">Recent Responses</h2>
+                <div id="responsesArea" class="space-y-4">
+                    <!-- Recent responses will be displayed here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Current Response -->
+        <div id="responseArea" class="mt-8 bg-dark-800 rounded-lg shadow p-6">
+            <!-- Current response will be displayed here -->
+        </div>
+    </div>
+
+    <script>
+        // Add this to your existing JavaScript or update main.js
+        async function loadArchivedCaptures() {
+            try {
+                const response = await fetch('/archived_captures');
+                const archives = await response.json();
+                
+                const archivedGrid = document.getElementById('archivedGrid');
+                archivedGrid.innerHTML = archives.length === 0 ? 
+                    '<p class="text-gray-400 col-span-full text-center">No archived captures</p>' : '';
+                
+                archives.forEach(archive => {
+                    const imgWrapper = document.createElement('div');
+                    imgWrapper.className = 'relative group';
+                    
+                    const img = document.createElement('img');
+                    img.src = `data:image/png;base64,${archive.image_data}`;
+                    img.alt = 'Archived Frame';
+                    img.className = 'draggable-image w-full h-32 object-cover rounded-lg shadow-lg cursor-move';
+                    img.draggable = true;
+                    img.dataset.imageId = archive._id;
+                    img.dataset.isArchived = 'true';
+                    
+                    const actions = document.createElement('div');
+                    actions.className = 'absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity';
+                    actions.innerHTML = `
+                        <button onclick="deleteImage('${archive._id}', true)" class="bg-red-600 text-white p-2 rounded hover:bg-red-700">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                        </button>
+                    `;
+                    
+                    imgWrapper.appendChild(img);
+                    imgWrapper.appendChild(actions);
+                    archivedGrid.appendChild(imgWrapper);
+                });
+                
+                // Reinitialize drag and drop
+                initializeDragAndDrop();
+            } catch (error) {
+                console.error('Error loading archived captures:', error);
+                archivedGrid.innerHTML = '<p class="text-red-500 col-span-full text-center">Error loading archived captures</p>';
+            }
+        }
+
+        // Call this function when the page loads and after new captures
+        document.addEventListener('DOMContentLoaded', loadArchivedCaptures);
+
+        const captureBtn = document.getElementById('captureBtn');
+        captureBtn.disabled = false;
+        captureBtn.innerHTML = 'Capture Frame';
+
+        captureBtn.addEventListener('click', function() {
+            captureBtn.disabled = true;
+            captureBtn.innerHTML = 'Capturing...';
+            // Add your logic here to capture a frame
+            captureBtn.disabled = false;
+            captureBtn.innerHTML = 'Capture Frame';
+        });
+    </script>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html> 
